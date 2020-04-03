@@ -1,84 +1,153 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/wait.h>   // Contains: waitpid
+#include <string.h>     // Contains: Useful string functions
+#include <sys/wait.h>   // Contains: wait functions
 #include <unistd.h>     // Contains: chdir, fork, exec, pid_t
 #include <stdlib.h>     // Contains: malloc, realloc, free, exit, execvp, EXIT_SUCCESS, EXIT_FAILURE
-#include<signal.h>  // For the SIGCHLD signal handler
+#include<signal.h>      // Contains: SIGCHLD signal
 
-// Defining Macros
+/**
+ * Defining Macros
+ */
 #define INITIAL_LINE_SIZE 1000
 #define INITIAL_ARGS_SIZE 100
 #define INITIAL_ARG_SIZE 256
 
-// Constants
+/**
+ * Defining Constants
+ */
 const char *SHELL_NAME = "shell";
 
+// Logs file name
+const char *LOGS_FILE_NAME = "logs";
+
+/**
+ * @param args: array of arguments starting from args[1]
+ * @return 1 to continue running, 0 to stop execution
+ */
 int cd_command(char **args);
 
+
+/**
+ * @return 0 to exit shell
+ */
 int exit_command();
 
-// List of commands
+/**
+ * Defining Global Variables
+ */
+// List of program builtin commands
 char *commands_list[] = {
         "cd",
         "exit"
 };
 
-// List of commands' functions
+
+// List of program builtin commands' functions
 int (*commands_functions[])(char **) = {
         &cd_command,
         &exit_command
 };
 
+
 /**
  * @brief A SIGCHLD signal handler
- * @param sig : signal number
+ * @param sig: the SIGSCHILD signal number which is 17
  */
 void sigchld_handler(int sig);
 
+/**
+ * @param line: input line taken from user
+ * @return an array of characters representing user input
+ */
 char *get_user_input(char *line);
 
+/**
+ * @param line: input line taken from user
+ * @param args: An empty pointer of pointers array
+ * representing a command and its arguments
+ * @return An array of pointers representing a command and arguments parsed from user input
+ */
 char **parse_user_input(char *line, char **args);
 
+/**
+ * @param args: An array of pointers representing a command and its arguments
+ * @param background: if the process is to be executed in background, when it equals 1
+ * @return 1 to keep the shell running, 0 to exit
+ */
 int execute_commands(char **args, int background);
 
+/**
+ * A function to start the shell program
+ */
 void run();
 
-void init(char **line, char **args);
-
+/**
+ * @brief Removes the extra line taken from user input
+ * @param line: user input
+ */
 void remove_new_line(char *line);
 
+/**
+ * @brief frees memory allocated for line and args
+ * @param line: user input
+ * @param args: Array of pointers containing parsed user input
+ */
 void free_memory(char *line, char **args);
 
-int check_args(char **args, int background);
+/**
+ * @brief Checks if the command is system defined or builtin in this program and runs the appropriate logic
+ * @param args: An array of pointers representing a command and arguments parsed from user input
+ * @param background: if the process is to be executed in background, when it equals 1
+ * @return 1 to continue running the program
+ */
+int check_command(char **args, int background);
 
+/**
+ * @return number of builtin commands in this program
+ */
 int get_commands_count();
 
+/**
+ * @return number of arguments for the command taken from user
+ */
 int get_args_count(char **args);
 
 /**
- *
- * @return shell exit status
+ * @return 1 if user entered ampersand '&' for running the command in background
  */
+int check_background(char **args, int argsCount);
+
+/**
+ * @brief removes ampersand '&' taken from user input
+ */
+void remove_ampersand(char **args, int argsCount);
+
+/**
+ * @brief logs child termination information
+ * @param pid: take process id
+ */
+void log_child_termination(pid_t pid);
+
 int main() {
 
-    // Run the program
+    // Start the program
     run();
 
     return EXIT_SUCCESS;
 }
 
-int check_background(char **args, int argsCount);
-
-void remove_ampersand(char **args, int argsCount);
-
-void log_child_termination(pid_t pid);
-
 void run() {
 
+    // Input line taken from user
     char *line = NULL;
+
+    // Array of pointers to hold parsed user input into a command and its arguments
     char **args = NULL;
+
+    // Program status
     int is_running;
+
+    // Specify if the command to run in the background, when equals 1
     int run_in_background;
 
     do {
@@ -92,8 +161,8 @@ void run() {
         // So that the command should run in background
         run_in_background = check_background(args, get_args_count(args));
 
-        // Execute user commands
-        is_running = check_args(args, run_in_background);
+        // Execute user command
+        is_running = check_command(args, run_in_background);
 
         // Free allocated memory
         free_memory(line, args);
@@ -103,6 +172,8 @@ void run() {
 }
 
 int check_background(char **args, int argsCount) {
+
+    // if the last arguments equals '&' remove it
     if (strcmp(args[argsCount - 1], "&") == 0) {
         remove_ampersand(args, argsCount);
         return 1;
@@ -114,13 +185,15 @@ void remove_ampersand(char **args, int argsCount) {
     args[argsCount - 1] = NULL;
 }
 
-int check_args(char **args, int background) {
+int check_command(char **args, int background) {
 
     // Ignore empty command
     if (args[0] == NULL)
         return 1;
 
     int num_commands = get_commands_count();
+
+    // Loop through program builtin commands to check if one matches user input
     for (int i = 0; i < num_commands; ++i) {
         if (strcmp(args[0], commands_list[i]) == 0)
             return (*commands_functions[i])(args);
@@ -220,20 +293,22 @@ int execute_commands(char **args, int background) {
     // SIGCHLD signal handler call
     signal(SIGCHLD, sigchld_handler);
 
-    pid_t pid;
+    pid_t pid, wpid;
+
+    // Forking a child process
     pid = fork();
+
+    // Child status holder
     int status;
 
     if (pid < 0) {
         // Error happened on forking
         perror(SHELL_NAME);
         exit(EXIT_FAILURE);
+
     } else if (pid == 0) {
 
         // Successful child process creation
-        // Child process
-
-//        printf("Child Process Created: %u\n", getpid());
 
         if (execvp(args[0], args) < 0)
             // Error Happened when executing command
@@ -244,58 +319,55 @@ int execute_commands(char **args, int background) {
 
     } else {
         // Parent process
-//        printf("Parent Process: %u\n", getppid());
 
         // Don't wait in case of background command
-        if (!background) {
+        if (!background)
 
             do {
-                waitpid(pid, &status, WUNTRACED);
-                log_child_termination(pid);
-            } while (!WIFEXITED(status) && !WIFSIGNALED(status));
 
-            /*if (waitpid(pid, &status, 0) > 0) {
+                wpid = waitpid(pid, &status, WUNTRACED);
 
-                if (WIFEXITED(status) && !WEXITSTATUS(status))
-                    printf("Program Execution Successful\n");
+                if (wpid > 0) {
 
-                else if (WIFEXITED(status) && WEXITSTATUS(status)) {
+                    if (WIFEXITED(status) && WEXITSTATUS(status)) {
 
-                    if (WEXITSTATUS(status) == 127)
-                        // Execution failed
-                        printf("Execution Failed");
-                    else
-                        printf("Program terminated normally, but returned a non-zero status\n");
+                        if (WEXITSTATUS(status) == 127)
+                            // Execution failed
+                            perror("Execution Failed");
+                        else
+                            printf("Program terminated normally, but returned a non-zero status\n");
+
+                    } else
+                        printf("Program didn't terminate normally\n");
 
                 } else
-                    printf("Program didn't terminate normally\n");
+                    printf("Waitpid() failed");
 
-            } else
-                // waitpid() failed
-                printf("Waitpid() failed");*/
-        }
+                log_child_termination(pid);
 
-        return 1;
+            } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+
+
     }
-
+    // Retuning 1 to continue running the program
+    return 1;
 }
 
 void log_child_termination(pid_t pid) {
 
     // Creating a file object in appending mode
     FILE *log;
-    log = fopen("logs", "a");
+    log = fopen(LOGS_FILE_NAME, "a");
 
     // Writing in the log file
-    fprintf(log,"Child process with pid: %u was terminated.\n", pid);
+    fprintf(log, "Child process with pid: %u was terminated.\n", pid);
 
     // Closing the file and checking for errors
     fclose(log);
-
 }
 
 int exit_command() {
-    return EXIT_SUCCESS;
+    return 0;
 }
 
 int cd_command(char **args) {
@@ -306,7 +378,6 @@ int cd_command(char **args) {
 
         if (chdir(args[1]) != 0)
             perror(SHELL_NAME);
-
     }
 
     // To resume executing commands
