@@ -41,7 +41,7 @@ The `run` function executes the following steps in a loop:
 4. Executes user command.
 5. Deallocate the memory used by the program's variables.
 
-![](./code_screenshots/run.svg)
+![](./code_screenshots/run.png)
 
 ### Commands Execution
 
@@ -51,7 +51,7 @@ First of all, we call the `check_command` function from main to know which type 
 
 If one matches, we execute the corresponding function to call the appropriate system call and make any needed adaptation.
 
-![](./code_screenshots/check_command.svg)
+![](./code_screenshots/check_command.png)
 
 If not, then we delegate the work to `execute_commands` function passing the `args` array which contains the command and its arguments along with `background` variable which specifies if the command to be run in the background or not.
 
@@ -61,13 +61,13 @@ In `execute_commands` function, we do a couple of things:
 2. Do the forking; if successful, we pass the command and its arguments to `execvp` system call which is a variant of  `exec` family.
 3. For the parent process, we wait for the child to terminate if not executed in background
 
-![](./code_screenshots/execute_commands.svg)
+![](./code_screenshots/execute_command.png)
 
 ### Logging
 
 Logging is simple, when a child terminates, we log its `pid` in `logs.txt` file.
 
-![](./code_screenshots/log.svg)
+![](./code_screenshots/log.png)
 
 
 
