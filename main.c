@@ -1,3 +1,9 @@
+
+///
+/// @author Ahmed Ashour
+/// @date 01/04/2020
+///
+
 #include <stdio.h>
 #include <string.h>     // Contains: Useful string functions
 #include <sys/wait.h>   // Contains: wait functions
@@ -16,9 +22,8 @@
  * Defining Constants
  */
 const char *SHELL_NAME = "shell";
-
-// Logs file name
 const char *LOGS_FILE_NAME = "logs";
+const char *SHELL_PROMPT = "$ ";
 
 /**
  * @param args: array of arguments starting from args[1]
@@ -40,7 +45,6 @@ char *commands_list[] = {
         "cd",
         "exit"
 };
-
 
 // List of program builtin commands' functions
 int (*commands_functions[])(char **) = {
@@ -171,67 +175,25 @@ void run() {
 
 }
 
-int check_background(char **args, int argsCount) {
-
-    // if the last arguments equals '&' remove it
-    if (strcmp(args[argsCount - 1], "&") == 0) {
-        remove_ampersand(args, argsCount);
-        return 1;
-    }
-    return 0;
-}
-
-void remove_ampersand(char **args, int argsCount) {
-    args[argsCount - 1] = NULL;
-}
-
-int check_command(char **args, int background) {
-
-    // Ignore empty command
-    if (args[0] == NULL)
-        return 1;
-
-    int num_commands = get_commands_count();
-
-    // Loop through program builtin commands to check if one matches user input
-    for (int i = 0; i < num_commands; ++i) {
-        if (strcmp(args[0], commands_list[i]) == 0)
-            return (*commands_functions[i])(args);
-    }
-
-    return execute_commands(args, background);
-}
-
-int get_commands_count() {
-    return sizeof(commands_list) / sizeof(char *);
-}
-
-void free_memory(char *line, char **args) {
-    free(line);
-    for (int i = 0; args[i] != NULL; ++i) {
-        free(args[i]);
-    }
-    free(args);
-}
-
 char *get_user_input(char *line) {
     // Allocating initial space for the line of arguments
     line = malloc(INITIAL_LINE_SIZE * sizeof(char));
 
-    printf("> ");
+    // Taking user input as a line
+    printf("%s", SHELL_PROMPT);
     fgets(line, INITIAL_LINE_SIZE, stdin);
+
+    // Removing extra \n at the end
     remove_new_line(line);
 
+    // Calculating characters in user input
+    int i = 0;
+    while (line[i++] != '\n');
+
+    // Reallocating the exact amount of memory for line array
+    line = realloc(line, i * sizeof(char) + 1);
+
     return line;
-}
-
-void remove_new_line(char *line) {
-    char *newLine;
-
-    newLine = strrchr(line, '\n');
-
-    if (newLine)
-        *newLine = '\0';
 }
 
 char **parse_user_input(char *line, char **args) {
@@ -248,11 +210,8 @@ char **parse_user_input(char *line, char **args) {
     // Track arguments count
     int argsCount = 0;
 
-    // Track line characters' count
-    int lineTotalChars = 0;
-
     // Loop through the line until a string terminator '\0' is found
-    for (int i = 0; line[i] != '\0'; i++, lineTotalChars++) {
+    for (int i = 0; line[i] != '\0'; i++) {
 
         // If a space is found, insert a string terminator at the end of the argument
         if (line[i] == ' ') {
@@ -274,7 +233,7 @@ char **parse_user_input(char *line, char **args) {
     }
 
     // Handling empty line case
-    if (lineTotalChars == 0)
+    if (argCharCount == 0)
         args[argsCount] = NULL;
     else
         args[++argsCount] = NULL;
@@ -282,10 +241,24 @@ char **parse_user_input(char *line, char **args) {
     // Reallocating the exact amount of memory for the arguments
     args = realloc(args, argsCount * sizeof(char *) + 1);
 
-    // Reallocating the exact amount of memory for line array
-    line = realloc(line, lineTotalChars * sizeof(char) + 1);
-
     return args;
+}
+
+int check_command(char **args, int background) {
+
+    // Ignore empty command
+    if (args[0] == NULL)
+        return 1;
+
+    int num_commands = get_commands_count();
+
+    // Loop through program builtin commands to check if one matches user input
+    for (int i = 0; i < num_commands; ++i) {
+        if (strcmp(args[0], commands_list[i]) == 0)
+            return (*commands_functions[i])(args);
+    }
+
+    return execute_commands(args, background);
 }
 
 int execute_commands(char **args, int background) {
@@ -293,7 +266,7 @@ int execute_commands(char **args, int background) {
     // SIGCHLD signal handler call
     signal(SIGCHLD, sigchld_handler);
 
-    pid_t pid, wpid;
+    pid_t pid;
 
     // Forking a child process
     pid = fork();
@@ -325,23 +298,7 @@ int execute_commands(char **args, int background) {
 
             do {
 
-                wpid = waitpid(pid, &status, WUNTRACED);
-
-                if (wpid > 0) {
-
-                    if (WIFEXITED(status) && WEXITSTATUS(status)) {
-
-                        if (WEXITSTATUS(status) == 127)
-                            // Execution failed
-                            perror("Execution Failed");
-                        else
-                            printf("Program terminated normally, but returned a non-zero status\n");
-
-                    } else
-                        printf("Program didn't terminate normally\n");
-
-                } else
-                    printf("Waitpid() failed");
+                waitpid(pid, &status, 0);
 
                 log_child_termination(pid);
 
@@ -364,6 +321,41 @@ void log_child_termination(pid_t pid) {
 
     // Closing the file and checking for errors
     fclose(log);
+}
+
+int check_background(char **args, int argsCount) {
+
+    // if the last arguments equals '&' remove it
+    if (argsCount != 0 && strcmp(args[argsCount - 1], "&") == 0) {
+        remove_ampersand(args, argsCount);
+        return 1;
+    }
+    return 0;
+}
+
+void remove_ampersand(char **args, int argsCount) {
+    args[argsCount - 1] = NULL;
+}
+
+int get_commands_count() {
+    return sizeof(commands_list) / sizeof(char *);
+}
+
+void free_memory(char *line, char **args) {
+    free(line);
+    for (int i = 0; args[i] != NULL; ++i) {
+        free(args[i]);
+    }
+    free(args);
+}
+
+void remove_new_line(char *line) {
+    char *newLine;
+
+    newLine = strrchr(line, '\n');
+
+    if (newLine)
+        *newLine = '\0';
 }
 
 int exit_command() {
@@ -397,5 +389,7 @@ void sigchld_handler(int sig) {
 
     pid = wait(NULL);
 
-    log_child_termination(pid);
+    // Checking if it is a background process
+    if (pid != -1)
+        log_child_termination(pid);
 }
